@@ -154,8 +154,10 @@ public class MainActivity extends AppCompatActivity {
             @RequiresApi(api = Build.VERSION_CODES.KITKAT)
             @Override
             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                currentbalance = dataSnapshot.child("amount").getValue().toString();
-                txtCustomerBalance.setText("₹"+currentbalance);
+                if (dataSnapshot.exists()){
+                    currentbalance = dataSnapshot.child("amount").getValue().toString();
+                    txtCustomerBalance.setText("₹"+currentbalance);
+                }
             }
 
             @Override
@@ -202,6 +204,7 @@ public class MainActivity extends AppCompatActivity {
         posRef = FirebaseDatabase.getInstance().getReference("transactions");
         HashMap<String, String> hashMap = new HashMap<String, String>();
         hashMap.put("user", user);
+        hashMap.put("type", "0");
         hashMap.put("amount", balance_to_adjust);
         posRef.push().setValue(hashMap);
         Toast.makeText(MainActivity.this, "Balance Added!", Toast.LENGTH_SHORT).show();
@@ -212,6 +215,8 @@ public class MainActivity extends AppCompatActivity {
 
         final ArrayList<String> txn = new ArrayList<>();
 
+        txn.clear();
+
         posRef = FirebaseDatabase.getInstance().getReference("transactions");
         posRef.addValueEventListener(new ValueEventListener() {
             @Override
@@ -220,8 +225,12 @@ public class MainActivity extends AppCompatActivity {
                 for (DataSnapshot dataSnapshot1 : dataSnapshot.getChildren()){
                     String user = dataSnapshot1.child("user").getValue().toString();
                     String amount = dataSnapshot1.child("amount").getValue().toString();
-                    String txn_list = "Rs. "+amount+" received by user: "+user;
-                    txn.add(txn_list);
+                    String type = dataSnapshot1.child("type").getValue().toString();
+                    if (type.equals("0")){
+                        String txn_list = "Rs. "+amount+" received from user: "+user;
+                        txn.add(txn_list);
+                    }
+
                 }
 
                 Context context;
