@@ -1,5 +1,6 @@
 package com.datsea.posseller;
 
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.support.annotation.NonNull;
@@ -8,9 +9,11 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -20,6 +23,7 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Objects;
 
@@ -27,10 +31,14 @@ public class MainActivity extends AppCompatActivity {
 
     DatabaseReference posRef;
     SharedPreferences master;
-    TextView txtName, txtUpi;
+    TextView txtName, txtUpi, txtCustomerBalance;
     LinearLayout lvAmount, lvTapCard, lvRegisterUser;
-    EditText txtCName, txtCUpi;
-    Button btnRegister;
+    EditText txtCName, txtCUpi, txtUserAmount;
+    Button btnRegister, btnRequest;
+    String currentbalance = "0";
+    String user = "";
+    ListView listView;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,13 +46,28 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         txtName = findViewById(R.id.txtName);
+        listView = findViewById(R.id.listView);
         txtUpi = findViewById(R.id.txtUpi);
         lvAmount = findViewById(R.id.lvAmount);
         lvTapCard = findViewById(R.id.lvTapCard);
         lvRegisterUser = findViewById(R.id.lvRegisterUser);
         txtCName = findViewById(R.id.txtCName);
         txtCUpi = findViewById(R.id.txtCUpi);
+        txtUserAmount = findViewById(R.id.txtUserAmount);
+        txtCustomerBalance = findViewById(R.id.txtCustomerBalance);
         btnRegister = findViewById(R.id.btnRegister);
+        btnRequest = findViewById(R.id.button);
+        btnRequest.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                String amount = txtUserAmount.getText().toString();
+                if (TextUtils.isEmpty(amount)){
+                    Toast.makeText(MainActivity.this, "Amount is needed", Toast.LENGTH_SHORT).show();
+                }
+                updateBalance(amount);
+            }
+        });
+
         master = this.getSharedPreferences("master", 0);
 
         lvTapCard.setVisibility(View.VISIBLE);
@@ -57,7 +80,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
                 if (dataSnapshot.hasChild("user-id")){
-                    final String user_id = Objects.requireNonNull(dataSnapshot.child("user-id").getValue()).toString();
+                   final String user_id = Objects.requireNonNull(dataSnapshot.child("user-id").getValue()).toString();
+                   user = user_id;
                     posRef = FirebaseDatabase.getInstance().getReference("user_Data");
                     posRef.addValueEventListener(new ValueEventListener() {
                         @Override
@@ -101,6 +125,9 @@ public class MainActivity extends AppCompatActivity {
 
             }
         });
+
+        fetchTransactions();
+
     }
 
     private void getUserData(String user_id){
@@ -121,6 +148,22 @@ public class MainActivity extends AppCompatActivity {
 
             }
         });
+
+        posRef = FirebaseDatabase.getInstance().getReference("request");
+        posRef.addValueEventListener(new ValueEventListener() {
+            @RequiresApi(api = Build.VERSION_CODES.KITKAT)
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                currentbalance = dataSnapshot.child("amount").getValue().toString();
+                txtCustomerBalance.setText("₹"+currentbalance);
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+
+            }
+        });
+
     }
 
     private void removeUserId(){
@@ -133,6 +176,7 @@ public class MainActivity extends AppCompatActivity {
         lvAmount.setVisibility(View.VISIBLE);
         txtName.setText(master.getString("name", "--"));
         txtUpi.setText(master.getString("upi", "--"));
+        txtCustomerBalance.setText(master.getString("balance", "--"));
     }
 
     private void registerUser(String user_id, String name, String upi){
@@ -146,6 +190,51 @@ public class MainActivity extends AppCompatActivity {
         lvRegisterUser.setVisibility(View.GONE);
         lvTapCard.setVisibility(View.VISIBLE);
 
+    }
+
+    private void updateBalance(String balance_to_adjust){
+        int current_balance = Integer.parseInt(currentbalance);
+        int add_balance = Integer.parseInt(balance_to_adjust);
+        int updated_balance = current_balance-add_balance;
+        posRef = FirebaseDatabase.getInstance().getReference("request");
+        posRef.child("amount").setValue(updated_balance);
+        txtUserAmount.setText("");
+        posRef = FirebaseDatabase.getInstance().getReference("transactions");
+        HashMap<String, String> hashMap = new HashMap<String, String>();
+        hashMap.put("user", user);
+        hashMap.put("amount", balance_to_adjust);
+        posRef.push().setValue(hashMap);
+        Toast.makeText(MainActivity.this, "Balance Added!", Toast.LENGTH_SHORT).show();
+        //txtBal.setText("");
+    }
+
+    private void fetchTransactions(){
+
+        final ArrayList<String> txn = new ArrayList<>();
+
+        posRef = FirebaseDatabase.getInstance().getReference("transactions");
+        posRef.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                txn.clear();
+                for (DataSnapshot dataSnapshot1 : dataSnapshot.getChildren()){
+                    String user = dataSnapshot1.child("user").getValue().toString();
+                    String amount = dataSnapshot1.child("amount").getValue().toString();
+                    String txn_list = "Rs. "+amount+" received by user: "+user;
+                    txn.add(txn_list);
+                }
+
+                Context context;
+                ArrayAdapter arrayAdapter = new ArrayAdapter<String>(getApplicationContext(), R.layout.support_simple_spinner_dropdown_item, txn);
+                listView.setAdapter(arrayAdapter);
+
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+
+            }
+        });
     }
 
 }
